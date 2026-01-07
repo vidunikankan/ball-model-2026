@@ -15,14 +15,19 @@ PourState_t PourState = IDLE;
 #define START_POUR() digitalWrite(relayPin, HIGH)
 #define STOP_POUR() digitalWrite(relayPin, LOW)
 
+// define relay pin
+//#define relayPin A7
+// TCS230 or TCS3200 pins wiring to Arduino
+#define S0 2
+#define S1 3
+#define S2 4
+#define S3 5
+#define sensorOut 6
 // Ultra Sonic Sensor Declarations
 //  defines pins numbers
 #define TRIG_PIN 9
 #define ECHO_PIN 10
 
-//LCD
-#define SDA_PIN 11
-#define SCL_PIN 12
 
 #define LCD_ADDR 0x27   // common: 0x27 or 0x3F
 #define LCD_COLS 20
@@ -73,15 +78,24 @@ byte stream2[8] = {
   0x18
 };
 
-
-
 // defines variables
 long Duration;
 int Distance;
 unsigned long TimePourStarted;
 
+/// Stores frequency read by the photodiodes
+int redFrequency = 0;
+int greenFrequency = 0;
+int blueFrequency = 0;
+
+// Stores the red. green and blue colors
+int redColor = 0;
+int greenColor = 0;
+int blueColor = 0;
+
 // declare function
 int readDistance();
+int readColour();
 
 // Linked List to Take Moving Average
 
@@ -97,13 +111,10 @@ int readDistance();
 #define TOO_FAR (POUR_HIGH + 1)               // If lower than this do not pour
 #define TOO_CLOSE (POUR_LOW - 1)              // If greater than this do not pour
 
-// define relay pin
-#define relayPin 2
-
 void setup()
 {
   //I2C setup
-  Wire.begin(SDA_PIN, SCL_PIN);
+  Wire.begin();
 
   //LCD setup
   lcd.init();
@@ -130,8 +141,19 @@ void setup()
   pinMode(TRIG_PIN, OUTPUT); // Sets the TRIG_PIN as an Output (Ultrasonice)
   pinMode(ECHO_PIN, INPUT);  // Sets the ECHO_PIN as an Input (Ultrasonice)
 
-  STOP_POUR();
-  pinMode(relayPin, OUTPUT); // Sets the relayPin as an Output (Relay)
+  // Setting the TCS3200 pins
+  pinMode(S0, OUTPUT);
+  pinMode(S1, OUTPUT);
+  pinMode(S2, OUTPUT);
+  pinMode(S3, OUTPUT);
+  pinMode(sensorOut, INPUT);
+
+  
+  //pinMode(relayPin, OUTPUT); // Sets the relayPin as an Output (Relay)
+  //STOP_POUR();
+
+  digitalWrite(S0,HIGH);
+  digitalWrite(S1,LOW);
 
   Serial.begin(9600); // Starts the serial communication
 
@@ -141,8 +163,8 @@ void setup()
 void loop()
 {
   readDistance(); // Takes Distance using USS to determine state
-
-  delay(5);
+  readColour();
+  delay(10);
 
   // This if statement needs to be combined with a state machine to ensure that 2 things don't happen
   // 1. The drink stops dispensing after one dispense
@@ -170,7 +192,7 @@ void loop()
 
     lcd.clear();
     loadSpriteSet(walleChars);
-    drawWalle(6, 1);
+    drawWalle(6, 2);
 
     delay(1000);
 
@@ -185,7 +207,7 @@ void loop()
       loadSpriteSet(beerChars);
       drawBeerMug(0, 0);
       PourState = POURING;
-      START_POUR(); // Turns on the relay
+      //START_POUR(); // Turns on the relay
       TimePourStarted = millis();
       Serial.print("Status: Cup detected... Pouring!\n");
 
@@ -193,10 +215,11 @@ void loop()
     break;
   case POURING:
     // check if cup is removed or timeout exceeded
+    //readColour();
     if (Distance >= TOO_FAR || Distance <= TOO_CLOSE || millis() - TimePourStarted > POUR_DURATION_MS)
     {
       PourState = FULL;
-      STOP_POUR();
+      //STOP_POUR();
     }
     break;
   case FULL:
@@ -233,6 +256,71 @@ int readDistance()
   Serial.println(Distance);
 
   return Distance;
+}
+
+int readColour()
+{
+  // Setting RED (R) filtered photodiodes to be read
+  digitalWrite(S2,LOW);
+  digitalWrite(S3,LOW);
+  Serial.print("Inside read colour");
+  
+  // Reading the output frequency
+  redFrequency = pulseIn(sensorOut, LOW);
+  // Remaping the value of the RED (R) frequency from 0 to 255
+  // You must replace with your own values. Here's an example: 
+
+  redColor = map(redFrequency, 26, 120, 255,0);
+  
+  // Printing the RED (R) value
+  Serial.print("R = ");
+  Serial.print(redColor);
+  delay(75);
+  
+  // Setting GREEN (G) filtered photodiodes to be read
+  digitalWrite(S2,HIGH);
+  digitalWrite(S3,HIGH);
+  
+  // Reading the output frequency
+  greenFrequency = pulseIn(sensorOut, LOW);
+  // Remaping the value of the GREEN (G) frequency from 0 to 255
+  // You must replace with your own values. Here's an example: 
+  
+  greenColor = map(greenFrequency, 60, 119, 255, 0);
+  
+  // Printing the GREEN (G) value  
+  Serial.print(" G = ");
+  Serial.print(greenColor);
+  delay(75);
+ 
+  // Setting BLUE (B) filtered photodiodes to be read
+  digitalWrite(S2,LOW);
+  digitalWrite(S3,HIGH);
+  
+  // Reading the output frequency
+  blueFrequency = pulseIn(sensorOut, LOW);
+  // Remaping the value of the BLUE (B) frequency from 0 to 255
+  // You must replace with your own values. Here's an example: 
+ 
+  blueColor = map(blueFrequency, 30, 214, 255, 0);
+  
+  // Printing the BLUE (B) value 
+  Serial.print(" B = ");
+  Serial.print(blueColor);
+  delay(75);
+
+  // Checks the current detected color and prints
+  // a message in the serial monitor
+  if(redColor > greenColor && redColor > blueColor){
+      Serial.println(" - RED detected!");
+  }
+  if(greenColor > redColor && greenColor > blueColor){
+    Serial.println(" - GREEN detected!");
+  }
+  if(blueColor > redColor && blueColor > greenColor){
+    Serial.println(" - BLUE detected!");
+  }
+
 }
 
 void loadSpriteSet(const byte sprites[8][8])
