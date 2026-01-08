@@ -16,7 +16,7 @@ PourState_t PourState = IDLE;
 #define STOP_POUR() digitalWrite(relayPin, LOW)
 
 // define relay pin
-//#define relayPin A7
+#define relayPin 13
 // TCS230 or TCS3200 pins wiring to Arduino
 #define S0 2
 #define S1 3
@@ -81,6 +81,7 @@ byte stream2[8] = {
 // defines variables
 long Duration;
 int Distance;
+int Red_True = 0;
 unsigned long TimePourStarted;
 
 /// Stores frequency read by the photodiodes
@@ -103,8 +104,8 @@ int readColour();
 // Distance Requirements & State
 
 #define POUR_RADIUS 3  // Measured in cm
-#define POUR_CENTER 20 // Measured in cm
-#define POUR_DURATION_MS 3000
+#define POUR_CENTER 15 // Measured in cm
+#define POUR_DURATION_MS 5000
 
 #define POUR_HIGH (POUR_CENTER + POUR_RADIUS) // If between POUR_HIGH
 #define POUR_LOW (POUR_CENTER - POUR_RADIUS)  // and POUR_LOW then pour
@@ -149,8 +150,8 @@ void setup()
   pinMode(sensorOut, INPUT);
 
   
-  //pinMode(relayPin, OUTPUT); // Sets the relayPin as an Output (Relay)
-  //STOP_POUR();
+  pinMode(relayPin, OUTPUT); // Sets the relayPin as an Output (Relay)
+  STOP_POUR();
 
   digitalWrite(S0,HIGH);
   digitalWrite(S1,LOW);
@@ -179,7 +180,7 @@ void loop()
     //   Serial.print("Status: No cup detected\n");
     // }
     lcd.clear();
-    lcd.setCursor(5, 0);
+    lcd.setCursor(3, 1);
     lcd.print("Ready to pour!");   // left eye    
 
     delay(1000);
@@ -200,14 +201,33 @@ void loop()
     loadSpriteSet(beerChars);
     drawBeerMug(16,0);
 
+     delay(1000);
+
+    lcd.clear();
+    lcd.setCursor(3, 1);
+    lcd.print("Place red solo");
+    lcd.setCursor(4, 2);
+    lcd.print("cup inside.");
+    
+    delay(1000);
+
+    lcd.clear();
+    loadSpriteSet(beerChars);
+    drawBeerMug(8,0);
+
+     delay(1000);
     
 
-    if (Distance <= POUR_HIGH && Distance >= POUR_LOW)
+    if (Distance <= POUR_HIGH && Distance >= POUR_LOW && Red_True)
     {
+      lcd.clear();  
       loadSpriteSet(beerChars);
-      drawBeerMug(0, 0);
+      drawBeerMug(0, 0); 
+      drawBeerMug(16, 0);
+      lcd.setCursor(5, 1);
+      lcd.print("POURING...");   // left eye    
       PourState = POURING;
-      //START_POUR(); // Turns on the relay
+      START_POUR(); // Turns on the relay
       TimePourStarted = millis();
       Serial.print("Status: Cup detected... Pouring!\n");
 
@@ -216,10 +236,16 @@ void loop()
   case POURING:
     // check if cup is removed or timeout exceeded
     //readColour();
-    if (Distance >= TOO_FAR || Distance <= TOO_CLOSE || millis() - TimePourStarted > POUR_DURATION_MS)
+    if (Distance >= TOO_FAR || Distance <= TOO_CLOSE || millis() - TimePourStarted > POUR_DURATION_MS || ~Red_True)
     {
       PourState = FULL;
-      //STOP_POUR();
+      lcd.clear();
+      loadSpriteSet(walleChars);
+      drawWalle(0, 1);
+      drawWalle(16, 1);
+      lcd.setCursor(6, 1);
+      lcd.print("ENJOY :)"); 
+      STOP_POUR();
     }
     break;
   case FULL:
@@ -227,6 +253,7 @@ void loop()
     if (Distance >= TOO_FAR || Distance <= TOO_CLOSE)
     {
       PourState = IDLE;
+
     }
     break;
   }
@@ -263,14 +290,13 @@ int readColour()
   // Setting RED (R) filtered photodiodes to be read
   digitalWrite(S2,LOW);
   digitalWrite(S3,LOW);
-  Serial.print("Inside read colour");
   
   // Reading the output frequency
   redFrequency = pulseIn(sensorOut, LOW);
   // Remaping the value of the RED (R) frequency from 0 to 255
   // You must replace with your own values. Here's an example: 
 
-  redColor = map(redFrequency, 26, 120, 255,0);
+  redColor = map(redFrequency, 95, 385, 255,0);
   
   // Printing the RED (R) value
   Serial.print("R = ");
@@ -286,7 +312,7 @@ int readColour()
   // Remaping the value of the GREEN (G) frequency from 0 to 255
   // You must replace with your own values. Here's an example: 
   
-  greenColor = map(greenFrequency, 60, 119, 255, 0);
+  greenColor = map(greenFrequency, 66, 465, 255, 0);
   
   // Printing the GREEN (G) value  
   Serial.print(" G = ");
@@ -302,7 +328,7 @@ int readColour()
   // Remaping the value of the BLUE (B) frequency from 0 to 255
   // You must replace with your own values. Here's an example: 
  
-  blueColor = map(blueFrequency, 30, 214, 255, 0);
+  blueColor = map(blueFrequency, 45, 372, 255, 0);
   
   // Printing the BLUE (B) value 
   Serial.print(" B = ");
@@ -313,13 +339,22 @@ int readColour()
   // a message in the serial monitor
   if(redColor > greenColor && redColor > blueColor){
       Serial.println(" - RED detected!");
+      Red_True = 1;
   }
-  if(greenColor > redColor && greenColor > blueColor){
+  else 
+  {
+    Red_True = 0;
+  }
+  /*if(greenColor > redColor && greenColor > blueColor){
     Serial.println(" - GREEN detected!");
+    Red_True = 0;
   }
   if(blueColor > redColor && blueColor > greenColor){
     Serial.println(" - BLUE detected!");
-  }
+    Red_True = 0;
+  }*/
+
+  return Red_True;
 
 }
 
